@@ -1,0 +1,37 @@
+services:
+  nexus-insight:
+    build: .
+    ports:
+      - "8080:8080"
+    env_file: .env
+    depends_on:
+      - redis
+      - searxng
+      - otel-collector
+    volumes:
+      - whisper_cache:/root/.cache/huggingface
+      - ./pdfs:/app/pdfs
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  searxng:
+    image: searxng/searxng:latest
+    ports:
+      - "8888:8080"
+    volumes:
+      - ./searxng:/etc/searxng
+    environment:
+      - SEARXNG_SECRET_KEY=nexus_insight_secret_key_change_me
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    volumes:
+      - ./otel-config.yml:/etc/otelcol-contrib/config.yaml
+
+volumes:
+  whisper_cache:
+  redis_data:

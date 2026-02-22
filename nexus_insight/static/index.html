@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nexus-Insight | Enterprise AI Engine</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        tech: {
+                            bg: '#030712',
+                            surface: '#0f172a',
+                            border: '#1e293b',
+                            text: '#f8fafc',
+                            muted: '#94a3b8',
+                            cyan: '#06b6d4',
+                            cyanHover: '#0891b2',
+                            purple: '#8b5cf6',
+                            glass: 'rgba(15, 23, 42, 0.75)'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    boxShadow: {
+                        'neon': '0 0 40px -10px rgba(6, 182, 212, 0.3)',
+                        'floating': '0 30px 60px -15px rgba(0, 0, 0, 0.5)',
+                        'glow': '0 0 20px rgba(139, 92, 246, 0.25)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #030712;
+            color: #f8fafc;
+            overflow-x: hidden;
+            background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        /* ── CHOREOGRAPHED 3-SECOND STARTUP ANIMATION ── */
+        .anim-viewport {
+            opacity: 0;
+            animation: fadeIn 0.5s ease 0s forwards;
+        }
+
+        .anim-hero-container {
+            transform: scale(0.95) translateY(20px);
+            opacity: 0;
+            animation: expandHero 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+        }
+
+        .anim-nav {
+            transform: translateY(-20px);
+            opacity: 0;
+            animation: slipDown 1s cubic-bezier(0.16, 1, 0.3, 1) 0.8s forwards;
+        }
+
+        .anim-text-1 {
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeUp 1s cubic-bezier(0.2, 0.8, 0.2, 1) 1.2s forwards;
+        }
+
+        .anim-text-2 {
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeUp 1s cubic-bezier(0.2, 0.8, 0.2, 1) 1.5s forwards;
+        }
+
+        .anim-text-3 {
+            opacity: 0;
+            transform: translateY(30px);
+            animation: fadeUp 1s cubic-bezier(0.2, 0.8, 0.2, 1) 1.8s forwards;
+        }
+
+        .anim-search-panel {
+            opacity: 0;
+            transform: translateY(60px);
+            animation: popUp 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) 2.0s forwards;
+        }
+
+        .anim-lower-content {
+            opacity: 0;
+            transform: translateY(40px);
+            animation: fadeUp 1.2s cubic-bezier(0.16, 1, 0.3, 1) 2.4s forwards;
+        }
+
+        @keyframes fadeIn {
+            to {
+                opacity: 1;
+            }
+        }
+
+        @keyframes expandHero {
+            to {
+                transform: scale(1) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slipDown {
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes popUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ── TECH UI COMPONENTS ── */
+        .hero-bg {
+            background-image: linear-gradient(to right, rgba(3, 7, 18, 0.95) 0%, rgba(3, 7, 18, 0.6) 50%, rgba(3, 7, 18, 0.4) 100%),
+                url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop');
+            background-size: cover;
+            background-position: center;
+        }
+
+        .search-input-ghost {
+            background: transparent;
+            border: none;
+            outline: none;
+            box-shadow: none;
+            color: white;
+        }
+
+        .search-input-ghost::placeholder {
+            color: #475569;
+        }
+
+        .search-input-ghost:focus {
+            outline: none;
+            box-shadow: none;
+        }
+
+        .search-card-bg {
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        /* Progress Steps */
+        .prog-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .ps {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 18px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            color: #64748b;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ps .ps-icon {
+            font-size: 1.1rem;
+            width: 24px;
+            text-align: center;
+            z-index: 2;
+        }
+
+        .ps .ps-label {
+            flex: 1;
+            font-weight: 500;
+            font-family: 'Inter', sans-serif;
+            z-index: 2;
+        }
+
+        .ps .ps-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 0%;
+            background: transparent;
+            transition: width 0.8s ease;
+            z-index: 1;
+        }
+
+        .ps.active {
+            color: #fff;
+            background: rgba(6, 182, 212, 0.05);
+            border-color: rgba(6, 182, 212, 0.3);
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.1);
+        }
+
+        .ps.active .ps-bar {
+            width: 60%;
+            background: linear-gradient(90deg, rgba(6, 182, 212, 0.15), transparent);
+        }
+
+        .ps.done {
+            color: #f8fafc;
+        }
+
+        .ps.done .ps-bar {
+            width: 100%;
+            background: rgba(34, 197, 94, 0.1);
+        }
+
+        /* Modalities */
+        .checkbox-custom input {
+            display: none;
+        }
+
+        .checkbox-custom span {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #94a3b8;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .checkbox-custom input:checked+span {
+            background: rgba(139, 92, 246, 0.15);
+            color: #fff;
+            border-color: rgba(139, 92, 246, 0.5);
+            box-shadow: 0 0 15px rgba(139, 92, 246, 0.2);
+        }
+
+        .checkbox-custom:hover span:not(:has(input:checked)) {
+            background: rgba(255, 255, 255, 0.06);
+            color: #fff;
+        }
+
+        /* Button Glow */
+        .btn-glow {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(135deg, #06b6d4, #3b82f6);
+            transition: all 0.3s;
+        }
+
+        .btn-glow::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transform: translateX(-100%);
+            transition: 0.5s;
+        }
+
+        .btn-glow:hover::before {
+            transform: translateX(100%);
+        }
+
+        .btn-glow:hover {
+            box-shadow: 0 0 25px rgba(6, 182, 212, 0.5);
+            transform: translateY(-1px);
+        }
+
+        /* Result formatting */
+        .result-body h2 {
+            font-family: 'Inter', sans-serif;
+            font-weight: 700;
+            font-size: 1.75rem;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+            color: #fff;
+        }
+
+        .result-body h3 {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            color: #cbd5e1;
+        }
+
+        .result-body p {
+            margin-bottom: 1rem;
+            font-size: 1rem;
+            line-height: 1.7;
+            color: #94a3b8;
+        }
+
+        .result-body ul {
+            list-style: disc;
+            margin-left: 2rem;
+            margin-bottom: 1rem;
+            color: #94a3b8;
+        }
+
+        .result-body li {
+            margin-bottom: 0.5rem;
+        }
+
+        .result-body code {
+            background: rgba(6, 182, 212, 0.1);
+            color: #22d3ee;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85em;
+            border: 1px solid rgba(6, 182, 212, 0.2);
+        }
+
+        .result-body strong {
+            font-weight: 600;
+            color: #f8fafc;
+        }
+
+        /* Badge for confidence */
+        .badge-tech {
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .badge-verified {
+            background: rgba(34, 197, 94, 0.1);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        .badge-warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .badge-kb {
+            background: rgba(139, 92, 246, 0.1);
+            color: #c084fc;
+            border: 1px solid rgba(139, 92, 246, 0.2);
+        }
+
+        /* Interactive Card Overlays */
+        .tech-feature-card {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s;
+        }
+
+        .tech-feature-card:hover {
+            background: rgba(30, 41, 59, 0.8);
+            border-color: rgba(6, 182, 212, 0.3);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px -10px rgba(6, 182, 212, 0.2);
+        }
+    </style>
+</head>
+
+<body class="anim-viewport">
+
+    <div class="max-w-[1400px] mx-auto px-4 sm:px-8 pt-6 pb-20 relative">
+
+        <!-- HERO SECTION CONTAINER (Image + Overlays) -->
+        <main
+            class="anim-hero-container relative w-full rounded-[2rem] overflow-hidden bg-tech-surface border border-tech-border h-[600px] md:h-[700px] shadow-neon">
+
+            <!-- Background Image -->
+            <div class="absolute inset-0 hero-bg"></div>
+            <div class="absolute inset-0 bg-gradient-to-t from-tech-bg/80 to-transparent"></div>
+
+            <!-- Navigation (Inside Hero) -->
+            <nav
+                class="anim-nav absolute top-0 left-0 right-0 px-8 py-6 flex items-center justify-between z-20 border-b border-white/5 bg-black/10 backdrop-blur-sm">
+                <div class="flex items-center gap-3">
+                    <div
+                        class="w-10 h-10 rounded-xl bg-gradient-to-br from-tech-cyan to-tech-purple flex items-center justify-center shadow-glow">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                            <polyline points="2 17 12 22 22 17"></polyline>
+                            <polyline points="2 12 12 17 22 12"></polyline>
+                        </svg>
+                    </div>
+                    <span class="font-sans font-bold text-white tracking-wide text-xl">Nexus</span>
+                </div>
+
+                <div class="hidden md:flex items-center gap-10 font-sans text-sm font-medium text-tech-muted">
+                    <a href="/" class="hover:text-tech-cyan transition-colors">Engine</a>
+                    <a href="#about" class="hover:text-tech-cyan transition-colors">Architecture</a>
+                    <a href="#metrics" class="hover:text-tech-cyan transition-colors">Metrics</a>
+                    <a href="/docs" class="hover:text-tech-cyan transition-colors">API Console</a>
+                </div>
+
+                <button
+                    class="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-5 py-2 rounded-lg font-mono text-xs transition-colors backdrop-blur-md">
+                    <span id="header-status">Checking Nodes...</span>
+                </button>
+            </nav>
+
+            <!-- Hero Content -->
+            <div class="relative z-10 h-full flex flex-col justify-center px-8 md:px-20 max-w-4xl">
+                <div class="anim-text-1 inline-block mb-8">
+                    <span
+                        class="font-mono text-[10px] font-bold tracking-[0.3em] text-tech-cyan uppercase bg-tech-cyan/10 border border-tech-cyan/30 px-3 py-1.5 rounded-md shadow-neon">
+                        System v2.0 Live
+                    </span>
+                </div>
+                <h1 class="anim-text-2 font-sans text-5xl md:text-7xl font-extrabold text-white leading-tight mb-6">
+                    Compute truth.<br />
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-tech-cyan to-tech-purple">Ignore
+                        the noise.</span>
+                </h1>
+                <p class="anim-text-3 font-sans text-lg md:text-xl text-tech-muted max-w-2xl leading-relaxed">
+                    Enterprise-grade autonomous research engine. Synthesize verified data from the open web, internal
+                    PDFs, and media using agentic workflows.
+                </p>
+            </div>
+        </main>
+
+        <!-- FLOATING SEARCH BAR OVERLAP -->
+        <div class="anim-search-panel relative z-30 max-w-5xl mx-auto -mt-[40px] px-4">
+            <div class="search-card-bg rounded-2xl md:rounded-[2rem] p-4 md:p-6 mb-8">
+
+                <!-- Sleek Command Layout -->
+                <div
+                    class="flex flex-col lg:flex-row items-center gap-4 bg-black/40 p-2 lg:p-3 rounded-[1.25rem] border border-white/5 shadow-inner">
+
+                    <!-- Query Input -->
+                    <div class="flex-1 w-full flex items-center px-4 py-2 relative">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" class="mr-4">
+                            <circle cx="11" cy="11" r="8" />
+                            <path d="m21 21-4.3-4.3" />
+                        </svg>
+                        <input type="text" id="q"
+                            class="search-input-ghost w-full font-sans text-xl text-white font-medium placeholder-slate-600"
+                            placeholder="Initialize research sequence...">
+                        <div
+                            class="hidden lg:block absolute right-4 text-[10px] font-mono text-slate-500 bg-white/5 border border-white/10 px-2 py-1 rounded">
+                            Ctrl+Enter</div>
+                    </div>
+
+                    <!-- Modalities & Action Group -->
+                    <div
+                        class="w-full lg:w-auto flex flex-col sm:flex-row items-center gap-4 pl-0 lg:pl-6 lg:border-l border-white/10">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <label class="checkbox-custom"><input type="checkbox" name="mod" value="web"
+                                    checked><span>Web</span></label>
+                            <label class="checkbox-custom"><input type="checkbox" name="mod"
+                                    value="pdf"><span>PDF</span></label>
+                            <label class="checkbox-custom"><input type="checkbox" name="mod"
+                                    value="video"><span>Video</span></label>
+                        </div>
+
+                        <button id="go-btn" onclick="startResearch()"
+                            class="btn-glow w-full sm:w-auto text-white px-8 py-3.5 rounded-xl font-sans font-bold text-sm tracking-wide flex items-center justify-center gap-2 whitespace-nowrap shadow-lg">
+                            Execute
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M5 12h14"></path>
+                                <path d="m12 5 7 7-7 7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="prog-wrap" class="mt-6 pt-6 border-t border-slate-700/50" style="display: none;">
+                    <div class="flex items-center gap-4 mb-5">
+                        <div class="spinner-border spinner-border-sm text-tech-cyan" role="status"></div>
+                        <strong class="font-mono text-sm text-white racking-wide">Agents orchestrating task...</strong>
+                    </div>
+                    <div class="prog-steps">
+                        <div class="ps" id="ps-intake"><span class="ps-icon">🧠</span><span class="ps-label">Classifying
+                                intent & parsing vectors</span>
+                            <div class="ps-bar"></div>
+                        </div>
+                        <div class="ps" id="ps-plan"><span class="ps-icon">🗺️</span><span class="ps-label">Generating
+                                sub-agent routing</span>
+                            <div class="ps-bar"></div>
+                        </div>
+                        <div class="ps" id="ps-explore"><span class="ps-icon">🌐</span><span class="ps-label">Fetching
+                                external endpoint data</span>
+                            <div class="ps-bar"></div>
+                        </div>
+                        <div class="ps" id="ps-verify"><span class="ps-icon">✅</span><span class="ps-label">Verifying
+                                logic via Chain-of-Verification</span>
+                            <div class="ps-bar"></div>
+                        </div>
+                        <div class="ps" id="ps-synth"><span class="ps-icon">📝</span><span class="ps-label">Compiling
+                                markdown dossier</span>
+                            <div class="ps-bar"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Result Container -->
+                <div id="res-wrap" class="mt-6 pt-6 border-t border-slate-700/50" style="display: none;">
+                    <div class="flex justify-between items-start mb-6">
+                        <div>
+                            <div
+                                class="font-mono text-[10px] font-bold text-tech-cyan uppercase tracking-widest mb-2 flex items-center gap-2">
+                                <div class="w-2 h-2 rounded-full bg-tech-cyan shadow-neon"></div> Process Output
+                            </div>
+                            <h2 id="r-query" class="font-sans text-xl font-bold text-white">Query Title Here</h2>
+                        </div>
+                        <button onclick="copyReport()"
+                            class="bg-white/5 hover:bg-white/10 border border-white/10 text-white px-4 py-2 rounded-lg font-mono text-xs transition-colors flex items-center gap-2">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                            </svg>
+                            <span id="copy-label">Copy JSON/MD</span>
+                        </button>
+                    </div>
+
+                    <div class="flex flex-wrap gap-4 mb-6 bg-black/40 p-4 rounded-xl border border-white/5">
+                        <div class="flex items-center gap-2 font-mono text-xs">
+                            <span class="text-slate-500">STATUS:</span><span id="m-conf"></span>
+                        </div>
+                        <div class="flex items-center gap-2 font-mono text-xs border-l border-white/10 pl-4">
+                            <span class="text-slate-500">LATENCY:</span><strong id="m-time" class="text-white"></strong>
+                        </div>
+                        <div class="flex items-center gap-2 font-mono text-xs border-l border-white/10 pl-4">
+                            <span class="text-slate-500">SOURCES:</span><strong id="m-src" class="text-white"></strong>
+                        </div>
+                        <div class="flex items-center gap-2 font-mono text-xs border-l border-white/10 pl-4">
+                            <span class="text-slate-500">ENGINE:</span><strong id="m-back"
+                                class="text-tech-cyan glow-text"
+                                style="text-shadow: 0 0 10px rgba(6,182,212,0.5);"></strong>
+                        </div>
+                    </div>
+
+                    <div id="r-body" class="result-body max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar"></div>
+                </div>
+
+                <!-- Error -->
+                <div id="err-wrap" class="mt-4" style="display:none;"></div>
+            </div>
+
+            <div class="flex justify-center gap-4 mt-8 opacity-80">
+                <button
+                    class="font-mono text-[10px] text-tech-muted hover:text-white border border-white/10 rounded px-3 py-1 transition-colors"
+                    data-bs-toggle="tooltip" title="LK-99 current status"
+                    onclick="setQ('What is the current state of room-temperature superconductors?')">> run --topic
+                    "superconductors"</button>
+                <button
+                    class="font-mono text-[10px] text-tech-muted hover:text-white border border-white/10 rounded px-3 py-1 transition-colors"
+                    data-bs-toggle="tooltip" title="Latest in Gene Editing"
+                    onclick="setQ('How does CRISPR gene editing work and what are its 2024 applications?')">> run
+                    --topic "crispr"</button>
+            </div>
+        </div>
+
+        <!-- LOWER TECH SECTION -->
+        <section class="anim-lower-content mt-24 max-w-6xl mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="tech-feature-card p-8 rounded-2xl">
+                <div
+                    class="w-12 h-12 rounded-lg bg-tech-cyan/10 border border-tech-cyan/20 flex items-center justify-center mb-6 text-tech-cyan">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                    </svg>
+                </div>
+                <h3 class="font-sans font-bold text-white text-lg mb-3">Zero AI Hallucinations</h3>
+                <p class="font-sans text-sm text-tech-muted leading-relaxed">Our proprietary Chain-of-Verification (CoV)
+                    loop rigorously checks generated claims against sourced facts before returning.</p>
+            </div>
+
+            <div class="tech-feature-card p-8 rounded-2xl">
+                <div
+                    class="w-12 h-12 rounded-lg bg-tech-purple/10 border border-tech-purple/20 flex items-center justify-center mb-6 text-tech-purple">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                        <line x1="8" y1="21" x2="16" y2="21" />
+                        <line x1="12" y1="17" x2="12" y2="21" />
+                    </svg>
+                </div>
+                <h3 class="font-sans font-bold text-white text-lg mb-3">Multi-Modal Ingestion</h3>
+                <p class="font-sans text-sm text-tech-muted leading-relaxed">Process web data, transcribe video audio
+                    via faster-whisper, and parse complex PDFs using our local RAG FAISS engine.</p>
+            </div>
+
+            <div class="tech-feature-card p-8 rounded-2xl">
+                <div
+                    class="w-12 h-12 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-6 text-emerald-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                </div>
+                <h3 class="font-sans font-bold text-white text-lg mb-3">Air-Gapped Privacy</h3>
+                <p class="font-sans text-sm text-tech-muted leading-relaxed">Run entirely on local LLMs via Ollama. No
+                    data leaves your machine unless you enable the high-speed Groq cloud endpoint.</p>
+            </div>
+        </section>
+
+    </div>
+
+    <style>
+        /* Custom Dark Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+
+    <script>
+        // System check
+        $(document).ready(function () {
+            $.ajax({
+                url: '/v1/health',
+                success: function (d) {
+                    const mode = d.backends?.active_mode || 'auto';
+                    $('#header-status').text(mode === 'ollama' ? 'Local Compute (Ollama)' : 'Cloud Compute (Groq)').addClass('text-tech-cyan border-tech-cyan/30');
+                },
+                error: function () {
+                    $('#header-status').text('Node Offline').addClass('text-red-400 border-red-500/30');
+                }
+            });
+
+            // Tooltips
+            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+            const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+        });
+
+        function setQ(t) { $('#q').val(t).focus(); }
+
+        const STEPS = ['intake', 'plan', 'explore', 'verify', 'synth'];
+        function setStep(name) {
+            STEPS.forEach((s, i) => {
+                const el = document.getElementById('ps-' + s);
+                const idx = STEPS.indexOf(name);
+                if (i < idx) el.className = 'ps done';
+                else if (i === idx) el.className = 'ps active';
+                else el.className = 'ps';
+            });
+        }
+
+        function md(t) {
+            if (!t) return '<p class="text-slate-500 italic">Nil output.</p>';
+            return t
+                .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+                .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                .replace(/`(.+?)`/g, '<code>$1</code>')
+                .replace(/^\- (.+)$/gm, '<li>$1</li>')
+                .replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
+                .split('\n\n').map(b => b.startsWith('<') ? b : `<p>${b}</p>`).join('\n');
+        }
+
+        let lastReport = '';
+        function copyReport() {
+            navigator.clipboard.writeText(lastReport).then(() => {
+                const l = document.getElementById('copy-label');
+                l.textContent = 'Copied!';
+                setTimeout(() => l.textContent = 'Copy JSON/MD', 2000);
+            });
+        }
+
+        function startResearch() {
+            const q = $('#q').val().trim();
+            if (!q) { $('#q').focus(); return; }
+            const mods = [];
+            $('input[name="mod"]:checked').each(function () { mods.push($(this).val()); });
+            if (!mods.length) { alert('Pipeline configuration error: select source modality.'); return; }
+
+            $('#go-btn').prop('disabled', true).addClass('opacity-50');
+            $('#prog-wrap').slideDown();
+            $('#res-wrap, #err-wrap').hide();
+
+            let si = 0; setStep(STEPS[0]);
+            const ticker = setInterval(() => { if (si < STEPS.length - 1) setStep(STEPS[++si]); }, 1400);
+
+            const t0 = Date.now();
+
+            $.ajax({
+                url: '/v1/research',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ query: q, modalities: mods, stream: false }),
+                success: function (data) {
+                    clearInterval(ticker); setStep('synth');
+                    const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+
+                    setTimeout(() => {
+                        $('#prog-wrap').slideUp();
+                        $('#res-wrap').slideDown();
+
+                        const report = data.final_report || '';
+                        lastReport = report;
+                        $('#r-query').text(data.query || q);
+                        $('#r-body').html(md(report));
+
+                        const conf = data.confidence_score ?? -1;
+                        let confHtml = '';
+                        if (conf < 0) {
+                            confHtml = '<span class="badge-tech badge-kb">KNOWLEDGE-BASE</span>';
+                        } else if (conf >= 0.7) {
+                            confHtml = `<span class="badge-tech badge-verified">VERIFIED [${(conf * 100).toFixed(0)}%]</span>`;
+                        } else {
+                            confHtml = `<span class="badge-tech badge-warning">CAUTION [${(conf * 100).toFixed(0)}%]</span>`;
+                        }
+
+                        $('#m-time').text(elapsed + 's');
+                        $('#m-conf').html(confHtml);
+                        $('#m-src').text(data.raw_sources?.length ?? 0);
+                        $('#m-back').text((data.llm_backend_used?.[0] || 'groq').toUpperCase());
+
+                        $('#go-btn').prop('disabled', false).removeClass('opacity-50');
+                    }, 800);
+                },
+                error: function (xhr) {
+                    clearInterval(ticker);
+                    $('#prog-wrap').slideUp();
+
+                    let errMsg = `500 INTERNAL_ERROR`;
+                    try {
+                        const e = JSON.parse(xhr.responseText);
+                        errMsg = e.detail || errMsg;
+                    } catch (e) { }
+
+                    $('#err-wrap').html(`
+                    <div class="bg-red-500/10 text-red-400 p-4 rounded-xl border border-red-500/20 flex gap-3 mt-4 font-mono text-sm">
+                        <span>[EXCEPTION]</span><span>${errMsg}</span>
+                    </div>
+                `).slideDown();
+                    $('#go-btn').prop('disabled', false).removeClass('opacity-50');
+                }
+            });
+        }
+
+        $('#q').on('keydown', function (e) {
+            if (e.ctrlKey && e.key === 'Enter') startResearch();
+        });
+    </script>
+</body>
+
+</html>

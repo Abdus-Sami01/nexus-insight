@@ -1,0 +1,240 @@
+# ============================================================
+#  Nexus-Insight .gitignore
+#  Python 3.12+ | FastAPI | LangGraph | Ollama | Docker
+# ============================================================
+
+
+# ── Secrets & Environment ────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+secrets/
+
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+MANIFEST
+
+
+# ── Virtual Environments ─────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+ENV/
+virtualenv/
+.python-version
+
+
+# ── Package Managers ─────────────────────────────────────────
+pip-log.txt
+pip-delete-this-directory.txt
+.pip-cache/
+
+
+# ── Testing & Coverage ───────────────────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.cover
+nosetests.xml
+test-results/
+test-reports/
+.tox/
+.nox/
+
+
+# ── Type Checking ────────────────────────────────────────────
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+
+
+# ── Linting & Formatting ─────────────────────────────────────
+.ruff_cache/
+.black_cache/
+
+
+# ── ML / AI Model Artifacts ──────────────────────────────────
+# Whisper models (faster-whisper downloads these locally)
+*.pt
+*.bin
+*.safetensors
+*.gguf
+*.ggml
+
+# HuggingFace / sentence-transformers cache
+# (auto-downloads BAAI/bge-m3, all-MiniLM-L6-v2 on first run)
+.cache/
+~/.cache/huggingface/
+models/
+model_cache/
+
+# FAISS index files (rebuilt per-session, not persisted)
+*.faiss
+*.index
+faiss_indexes/
+
+
+# ── Audio / Video Artifacts ──────────────────────────────────
+# Temporary files from yt-dlp and faster-whisper
+*.mp3
+*.mp4
+*.webm
+*.opus
+*.m4a
+*.wav
+*.flac
+downloads/
+tmp_audio/
+tmp_video/
+media_cache/
+
+
+# ── PDF Uploads & Processing ─────────────────────────────────
+# Keep the /pdfs directory but ignore actual PDF content
+pdfs/*.pdf
+uploads/
+tmp_pdfs/
+
+
+# ── Docker ───────────────────────────────────────────────────
+# Don't ignore docker-compose or Dockerfile — those are source
+# Ignore generated volumes and overrides
+docker-compose.override.yml
+.docker/
+
+
+# ── Redis Persistence ────────────────────────────────────────
+# Redis AOF / RDB dump files if running locally (not in Docker)
+dump.rdb
+appendonly.aof
+redis-data/
+
+
+# ── SearXNG ──────────────────────────────────────────────────
+# Generated config (keep settings.yml template, ignore runtime)
+searxng/settings.yml
+!searxng/settings.yml.example
+
+
+# ── OpenTelemetry ────────────────────────────────────────────
+otel-data/
+traces/
+
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+*.log.*
+logs/
+log/
+
+
+# ── Session & State Artifacts ────────────────────────────────
+sessions/
+state_dumps/
+*.session.json
+
+
+# ── Jupyter Notebooks ────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+
+# ── IDEs & Editors ───────────────────────────────────────────
+# VS Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+
+# JetBrains (PyCharm, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim / Neovim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+*#
+.\#*
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Zed
+.zed/
+
+
+# ── OS Artifacts ─────────────────────────────────────────────
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Linux
+*~
+
+
+# ── Documentation Build ──────────────────────────────────────
+docs/_build/
+docs/site/
+site/
+.mkdocs/
+
+
+# ── Profiling ────────────────────────────────────────────────
+*.prof
+*.lprof
+profile_output/
+
+
+# ── Benchmarks Output ────────────────────────────────────────
+.benchmarks/
+benchmark_results/
+
+
+# ── Misc ─────────────────────────────────────────────────────
+*.bak
+*.tmp
+*.temp
+.scratch/
+scratch/
+sandbox/
