@@ -31,6 +31,7 @@ class FaithfulnessEvaluator:
         supported_count = 0
         unsupported = []
         contradicted = []
+        total_tokens = 0
 
         batch_size = 5
         for i in range(0, len(sentences), batch_size):
@@ -42,6 +43,7 @@ class FaithfulnessEvaluator:
             
             try:
                 response = await llm_reasoning.ainvoke(prompt)
+                total_tokens += response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
                 data = json.loads(response.content)
                 verdicts = data.get("verdicts", [])
                 
@@ -65,7 +67,8 @@ class FaithfulnessEvaluator:
         return {
             "score": score,
             "unsupported": unsupported,
-            "contradicted": contradicted
+            "contradicted": contradicted,
+            "tokens": total_tokens
         }
 
     def _split_into_sentences(self, text: str) -> List[str]:

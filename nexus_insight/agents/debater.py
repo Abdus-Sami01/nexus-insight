@@ -13,7 +13,7 @@ class DebateParticipant:
         self.persona = persona
         self.llm_router = llm_router
 
-    async def speak(self, topic: str, context: str, history: List[Dict[str, str]]) -> str:
+    async def speak(self, topic: str, context: str, history: List[Dict[str, str]]) -> tuple[str, int]:
         llm = await self.llm_router.get_llm("fast")
         
         history_text = ""
@@ -32,10 +32,10 @@ class DebateParticipant:
 
         try:
             response = await llm.ainvoke(prompt)
-            return response.content.strip()
+            return response.content.strip(), response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
         except Exception as e:
             logger.error(f"Debate participant {self.name} failed: {e}")
-            return f"[ERROR] Failed to formulate argument."
+            return f"[ERROR] Failed to formulate argument.", 0
 
 class MultiAgentDebater:
     def __init__(self, llm_router: LLMRouter):
@@ -57,13 +57,13 @@ class MultiAgentDebater:
         query: str,
         unverified_claims: List[Claim], 
         contradictions: List[Contradiction]
-    ) -> List[Dict[str, str]]:
+    ) -> tuple[List[Dict[str, str]], int]:
         """
         Runs an adversarial debate over unverified claims and contradictions.
         Returns the debate log transcript.
         """
         if not unverified_claims and not contradictions:
-            return [{"role": "System", "content": "No conflicts or low-confidence claims found; debate skipped."}]
+            return [{"role": "System", "content": "No conflicts or low-confidence claims found; debate skipped."}], 0
             
         topic = f"Query: {query}\n"
         if contradictions:
@@ -77,18 +77,21 @@ class MultiAgentDebater:
                 topic += f"- {u.content}\n"
 
         history: List[Dict[str, str]] = []
+        total_tokens = 0
         
         for turn in range(self.max_turns):
             # Proposer goes first
-            prop_msg = await self.proposer.speak(topic=topic, context="See history.", history=history)
+            prop_msg, p_tokens = await self.proposer.speak(topic=topic, context="See history.", history=history)
             history.append({"role": "Proposer", "content": prop_msg})
+            total_tokens += p_tokens
             if "[CONCEDE]" in prop_msg:
                 break
                 
             # Skeptic responds
-            skep_msg = await self.skeptic.speak(topic=topic, context="See history.", history=history)
+            skep_msg, s_tokens = await self.skeptic.speak(topic=topic, context="See history.", history=history)
             history.append({"role": "Skeptic", "content": skep_msg})
+            total_tokens += s_tokens
             if "[CONCEDE]" in skep_msg:
                 break
 
-        return history
+        return history, total_tokens

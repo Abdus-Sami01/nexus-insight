@@ -14,10 +14,17 @@ async def test_full_graph_execution():
     
     # Sequence of mock LLM responses passing through the graph
     mock_llm = AsyncMock()
+    
+    def create_mock_response(content):
+        m = MagicMock()
+        m.content = content
+        m.response_metadata = {"model_name": "mock-model", "token_usage": {"total_tokens": 100}}
+        return m
+
     mock_llm.ainvoke.side_effect = [
-        MagicMock(content='{"sanitized_query": "mock query", "intent": "factual"}'), # intake
-        MagicMock(content='{"sub_queries": ["mock search 1", "mock search 2"]}'),     # plan
-        MagicMock(content='Synthetic response')                                        # synthesize
+        create_mock_response('{"sanitized_query": "mock query", "intent": "factual"}'), # intake
+        create_mock_response('{"sub_queries": ["mock search 1", "mock search 2"]}'),     # plan
+        create_mock_response('Synthetic response')                                        # synthesize
     ]
     mock_router.get_llm.return_value = mock_llm
     
@@ -25,17 +32,21 @@ async def test_full_graph_execution():
     mock_researcher.explore.return_value = [] # Return empty sources to force fast-fail logic
     
     mock_verifier = AsyncMock()
-    mock_verifier.extract_claims.return_value = []
-    mock_verifier.verify_claims.return_value = ([], []) # (verified_dossier, contradictions)
+    mock_verifier.extract_claims.return_value = ([], 0)
+    mock_verifier.verify_claims.return_value = ([], [], 0) # (verified_dossier, contradictions, tokens)
     
     mock_debater = AsyncMock()
-    mock_debater.resolve_conflicts.return_value = [{"role":"Proposer", "content":"No data."}]
+    mock_debater.resolve_conflicts.return_value = ([{"role":"Proposer", "content":"No data."}], 0)
     
     mock_graph_extractor = AsyncMock()
-    mock_graph_extractor.extract_and_build.return_value = "Mocked Graph Summary"
+    mock_graph_extractor.extract_and_build.return_value = {
+        "summary": "Mocked Graph Summary",
+        "data": {"nodes": [], "edges": []},
+        "tokens": 0
+    }
     
     mock_evaluator = AsyncMock()
-    mock_evaluator.evaluate.return_value = {"score": 1.0}
+    mock_evaluator.evaluate.return_value = {"score": 1.0, "tokens": 0}
     
     # 2. Instantiate Orchestrator with Mocks
     orch = Orchestrator(
@@ -63,6 +74,7 @@ async def test_full_graph_execution():
         "query_refinements": [],
         "citations": [],
         "llm_backend_used": [],
+        "graph_data": {"nodes": [], "edges": []},
         "span_ids": [],
         "total_tokens_used": 0,
         "token_budget": 10000,

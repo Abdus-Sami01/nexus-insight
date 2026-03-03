@@ -55,6 +55,7 @@ async def start_research(
         "confidence_threshold": request.confidence_threshold,
         "faithfulness_score": 1.0,
         "llm_backend_used": [],
+        "graph_data": {"nodes": [], "edges": []},
         "trace_id": session_id,
         "span_ids": [],
         "thought_log": [],
@@ -79,27 +80,44 @@ async def start_research(
 async def _run_research_stream(state: ResearchState):
     """
     Adapter that runs the LangGraph and yields SSE events.
+    Enforces token budgeting and accumulates state for final report.
     """
+    full_state = state.copy()
     try:
         async for output in _orchestrator.graph.astream(state, stream_mode="updates"):
-            # Map LangGraph updates to SSE events
-            node_name = list(output.keys())[0]
-            node_data = output[node_name]
-            
-            if "thought_log" in node_data and node_data["thought_log"]:
-                yield SSEEvent(event="thought", data=node_data["thought_log"][-1])
-            
-            if "raw_sources" in node_data:
-                for s in node_data["raw_sources"]:
-                    yield SSEEvent(event="source", data={"id": s.id, "type": s.source_type, "url": s.url})
-            
-            yield SSEEvent(event="progress", data={"node": node_name, "backend": "groq"})
-            
-            if node_name == "finalize":
-                yield SSEEvent(event="result", data={
-                    "report": node_data.get("final_report"),
-                    "citations": [c.model_dump() for c in node_data.get("citations", [])]
-                })
+            # Accumulate updates into full_state
+            for node_name, node_data in output.items():
+                for key, value in node_data.items():
+                    if key == "total_tokens_used":
+                        full_state["total_tokens_used"] += value
+                    elif isinstance(value, list) and key in full_state and isinstance(full_state[key], list):
+                        full_state[key].extend(value)
+                    else:
+                        full_state[key] = value
+
+                if "thought_log" in node_data and node_data["thought_log"]:
+                    yield SSEEvent(event="thought", data=node_data["thought_log"][-1])
+                
+                if "raw_sources" in node_data:
+                    for s in node_data["raw_sources"]:
+                        yield SSEEvent(event="source", data={"id": s.id, "type": s.source_type, "url": s.url})
+                
+                yield SSEEvent(event="progress", data={"node": node_name, "backend": "groq"})
+                
+                if "graph_data" in node_data:
+                    yield SSEEvent(event="graph", data=node_data["graph_data"])
+
+                if node_name == "finalize":
+                    yield SSEEvent(event="result", data={
+                        "session_id": full_state["session_id"],
+                        "query": full_state["query"],
+                        "report_markdown": full_state.get("final_report", "No report generated."),
+                        "confidence_score": full_state.get("confidence_score", 0.0),
+                        "faithfulness_score": full_state.get("faithfulness_score", 0.0),
+                        "citations": [c.model_dump() for c in full_state.get("citations", [])],
+                        "total_tokens": full_state["total_tokens_used"],
+                        "graph": full_state.get("graph_data")
+                    })
 
     except Exception as e:
         logger.error(f"Error in research stream: {e}")

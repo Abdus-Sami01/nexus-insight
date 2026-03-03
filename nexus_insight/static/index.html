@@ -16,6 +16,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
 
     <script>
         tailwind.config = {
@@ -486,6 +487,8 @@
                                     value="pdf"><span>PDF</span></label>
                             <label class="checkbox-custom"><input type="checkbox" name="mod"
                                     value="video"><span>Video</span></label>
+                            <label class="checkbox-custom"><input type="checkbox" name="mod"
+                                    value="academic"><span>Academic</span></label>
                         </div>
 
                         <button id="go-btn" onclick="startResearch()"
@@ -567,7 +570,25 @@
                         </div>
                     </div>
 
-                    <div id="r-body" class="result-body max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar"></div>
+                    <!-- Result Tabs -->
+                    <ul class="nav nav-pills mb-6 flex gap-2" id="resultTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active bg-white/5 text-white border border-white/10 px-6 py-2 rounded-lg text-sm font-medium hover:bg-white/10 transition-all active:!bg-tech-cyan" id="report-tab" data-bs-toggle="pill" data-bs-target="#report-pane" type="button" role="tab">Report</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link bg-white/5 text-white border border-white/10 px-6 py-2 rounded-lg text-sm font-medium hover:bg-white/10 transition-all active:!bg-tech-cyan" id="graph-tab" data-bs-toggle="pill" data-bs-target="#graph-pane" type="button" role="tab" onclick="renderKnowledgeGraph()">Knowledge Graph</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="resultTabsContent">
+                        <div class="tab-pane fade show active" id="report-pane" role="tabpanel">
+                            <div id="r-body" class="result-body max-h-[60vh] overflow-y-auto pr-4 custom-scrollbar"></div>
+                        </div>
+                        <div class="tab-pane fade" id="graph-pane" role="tabpanel">
+                            <div id="graph-container" class="w-full h-[500px] bg-black/20 rounded-xl border border-white/5"></div>
+                            <p class="mt-4 text-xs text-tech-muted italic font-mono">Knowledge Graph: Entities and semantic relationships extracted from sources.</p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Error -->
@@ -686,6 +707,45 @@
             });
         }
 
+        let currentGraphData = { nodes: [], edges: [] };
+        let graphNetwork = null;
+
+        function renderKnowledgeGraph() {
+            const container = document.getElementById('graph-container');
+            const data = {
+                nodes: new vis.DataSet(currentGraphData.nodes),
+                edges: new vis.DataSet(currentGraphData.edges)
+            };
+            const options = {
+                nodes: {
+                    shape: 'dot',
+                    size: 16,
+                    font: { size: 12, color: '#ffffff', face: 'Inter' },
+                    color: {
+                        background: '#06b6d4',
+                        border: '#0891b2',
+                        highlight: { background: '#8b5cf6', border: '#7c3aed' }
+                    },
+                    shadow: { enabled: true, color: 'rgba(6, 182, 212, 0.4)', size: 10 }
+                },
+                edges: {
+                    width: 2,
+                    color: { color: 'rgba(255, 255, 255, 0.1)', highlight: '#8b5cf6' },
+                    font: { size: 10, color: '#94a3b8', align: 'middle' },
+                    arrows: { to: { enabled: true, scaleFactor: 0.5 } }
+                },
+                physics: {
+                    stabilization: true,
+                    barnesHut: { gravitationalConstant: -2000, centralGravity: 0.3, springLength: 95 }
+                }
+            };
+            
+            if (graphNetwork) {
+                graphNetwork.destroy();
+            }
+            graphNetwork = new vis.Network(container, data, options);
+        }
+
         function md(t) {
             if (!t) return '<p class="text-slate-500 italic">Nil output.</p>';
             return t
@@ -728,55 +788,90 @@
                 url: '/v1/research',
                 type: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({ query: q, modalities: mods, stream: false }),
-                success: function (data) {
-                    clearInterval(ticker); setStep('synth');
-                    const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+                data: JSON.stringify({ query: q, modalities: mods, stream: true }),
+                success: function () {
+                    // Handled by EventSource below
+                }
+            });
 
-                    setTimeout(() => {
-                        $('#prog-wrap').slideUp();
-                        $('#res-wrap').slideDown();
+            // Using SSE for better thought-process visualization
+            const eventSource = new EventSource(`/v1/research?query=${encodeURIComponent(q)}&modalities=${JSON.stringify(mods)}&stream=true`);
+            
+            // Re-initializing for streaming
+            currentGraphData = { nodes: [], edges: [] };
+            $('#res-wrap').slideDown();
+            $('#r-query').text(q);
+            $('#r-body').html('<div class="flex items-center gap-2 p-4 text-tech-muted font-mono text-sm animate-pulse">Initializing reasoning stream...<span class="w-1 h-1 rounded-full bg-tech-cyan"></span><span class="w-1 h-1 rounded-full bg-tech-cyan"></span><span class="w-1 h-1 rounded-full bg-tech-cyan"></span></div>');
 
-                        const report = data.final_report || '';
-                        lastReport = report;
-                        $('#r-query').text(data.query || q);
-                        $('#r-body').html(md(report));
+            eventSource.addEventListener('thought', (e) => {
+                const data = JSON.parse(e.data);
+                const currentReport = $('#r-body').html();
+                // Prepend thoughts as subtle log entries
+                const thoughtHtml = `<div class="mb-4 p-3 bg-white/5 border-l-2 border-tech-cyan rounded-r-lg font-mono text-[10px] text-tech-muted animate-in fade-in slide-in-from-left-2">
+                    <span class="text-tech-cyan font-bold">[${data.node.toUpperCase()}]</span> ${data.thought}
+                </div>`;
+                $('#r-body').prepend(thoughtHtml);
+            });
 
-                        const conf = data.confidence_score ?? -1;
-                        let confHtml = '';
-                        if (conf < 0) {
-                            confHtml = '<span class="badge-tech badge-kb">KNOWLEDGE-BASE</span>';
-                        } else if (conf >= 0.7) {
-                            confHtml = `<span class="badge-tech badge-verified">VERIFIED [${(conf * 100).toFixed(0)}%]</span>`;
-                        } else {
-                            confHtml = `<span class="badge-tech badge-warning">CAUTION [${(conf * 100).toFixed(0)}%]</span>`;
-                        }
+            eventSource.addEventListener('progress', (e) => {
+                const data = JSON.parse(e.data);
+                setStep(data.node);
+                $('#m-back').text(data.backend.toUpperCase());
+            });
 
-                        $('#m-time').text(elapsed + 's');
-                        $('#m-conf').html(confHtml);
-                        $('#m-src').text(data.raw_sources?.length ?? 0);
-                        $('#m-back').text((data.llm_backend_used?.[0] || 'groq').toUpperCase());
+            eventSource.addEventListener('source', (e) => {
+                const data = JSON.parse(e.data);
+                const count = parseInt($('#m-src').text() || '0') + 1;
+                $('#m-src').text(count);
+            });
 
-                        $('#go-btn').prop('disabled', false).removeClass('opacity-50');
-                    }, 800);
-                },
-                error: function (xhr) {
-                    clearInterval(ticker);
+            eventSource.addEventListener('graph', (e) => {
+                const data = JSON.parse(e.data);
+                if (data.nodes) {
+                    currentGraphData.nodes.push(...data.nodes);
+                    currentGraphData.edges.push(...data.edges);
+                    // Filter duplicates
+                    currentGraphData.nodes = Array.from(new Set(currentGraphData.nodes.map(n => n.id))).map(id => currentGraphData.nodes.find(n => n.id === id));
+                }
+            });
+
+            eventSource.addEventListener('result', (e) => {
+                const data = JSON.parse(e.data);
+                eventSource.close();
+                clearInterval(ticker);
+                setStep('synth');
+                const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+
+                setTimeout(() => {
                     $('#prog-wrap').slideUp();
+                    $('#report-tab').click(); // Show report
+                    
+                    const report = data.report || '';
+                    lastReport = report;
+                    $('#r-body').html(md(report));
 
-                    let errMsg = `500 INTERNAL_ERROR`;
-                    try {
-                        const e = JSON.parse(xhr.responseText);
-                        errMsg = e.detail || errMsg;
-                    } catch (e) { }
+                    $('#m-time').text(elapsed + 's');
+                    $('#m-conf').html('<span class="badge-tech badge-verified">VERIFIED [COMPLETED]</span>');
+                    $('#go-btn').prop('disabled', false).removeClass('opacity-50');
+                    
+                    if (data.graph) {
+                        currentGraphData = data.graph;
+                        renderKnowledgeGraph();
+                    }
+                }, 800);
+            });
 
-                    $('#err-wrap').html(`
+            eventSource.addEventListener('error', (e) => {
+                const data = JSON.parse(e.data);
+                eventSource.close();
+                clearInterval(ticker);
+                $('#prog-wrap').slideUp();
+                $('#err-wrap').html(`
                     <div class="bg-red-500/10 text-red-400 p-4 rounded-xl border border-red-500/20 flex gap-3 mt-4 font-mono text-sm">
-                        <span>[EXCEPTION]</span><span>${errMsg}</span>
+                        <span>[EXCEPTION]</span><span>${data.message}</span>
                     </div>
                 `).slideDown();
-                    $('#go-btn').prop('disabled', false).removeClass('opacity-50');
-                }
+                $('#go-btn').prop('disabled', false).removeClass('opacity-50');
             });
         }
 

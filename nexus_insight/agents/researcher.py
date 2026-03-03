@@ -6,6 +6,9 @@ from nexus_insight.tools.web_search import WebSearchTool
 from nexus_insight.tools.pdf_engine import PDFEngine
 from nexus_insight.tools.media_analyzer import MediaAnalyzer
 
+from nexus_insight.tools.arxiv_tool import ArxivTool
+from nexus_insight.tools.pubmed_tool import PubmedTool
+
 logger = logging.getLogger(__name__)
 
 class ResearcherAgent:
@@ -17,11 +20,15 @@ class ResearcherAgent:
         self, 
         web_tool: WebSearchTool, 
         pdf_tool: PDFEngine, 
-        media_tool: MediaAnalyzer
+        media_tool: MediaAnalyzer,
+        arxiv_tool: ArxivTool = None,
+        pubmed_tool: PubmedTool = None
     ):
         self.web_tool = web_tool
         self.pdf_tool = pdf_tool
         self.media_tool = media_tool
+        self.arxiv_tool = arxiv_tool or ArxivTool()
+        self.pubmed_tool = pubmed_tool or PubmedTool()
 
     async def explore(self, queries: List[str], modalities: List[str], pdf_urls: List[str] = None, video_urls: List[str] = None) -> List[RawSource]:
         """
@@ -43,6 +50,12 @@ class ResearcherAgent:
         if "video" in modalities and video_urls:
             for url in video_urls:
                 tasks.append(self.media_tool.process_video(url))
+
+        # 4. Academic (arXiv + PubMed)
+        if "academic" in modalities:
+            for q in queries:
+                tasks.append(self.arxiv_tool.search(q))
+                tasks.append(self.pubmed_tool.search(q))
 
         logger.info(f"Launching {len(tasks)} research tasks across {modalities}")
         

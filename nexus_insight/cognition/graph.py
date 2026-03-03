@@ -21,13 +21,18 @@ class GraphExtractor:
         self.graph = nx.DiGraph()
 
     @trace_node("graph_extraction")
-    async def extract_and_build(self, sources: List[RawSource], query: str) -> str:
+    async def extract_and_build(self, sources: List[RawSource], query: str) -> Dict[str, Any]:
         """
         Parses sources to extract entities and builds a NetworkX Knowledge Graph.
-        Returns a text summary of the most central nodes and paths.
+        Returns a dictionary with 'summary', 'data' (nodes/edges), and 'tokens'.
         """
+        total_tokens = 0
         if not sources:
-            return "No sources available for Graph Construction."
+            return {
+                "summary": "No sources available for Graph Construction.",
+                "data": {"nodes": [], "edges": []},
+                "tokens": 0
+            }
 
         llm = await self.llm_router.get_llm("fast")
         
@@ -45,6 +50,7 @@ class GraphExtractor:
             
             try:
                 response = await llm.ainvoke(prompt)
+                total_tokens += response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
                 data = json.loads(response.content)
                 
                 for rel in data:
@@ -61,9 +67,35 @@ class GraphExtractor:
                 continue
 
         if self.graph.number_of_nodes() == 0:
-            return "Graph built, but no strong semantic connections were found."
+            return {
+                "summary": "Graph built, but no strong semantic connections were found.",
+                "data": {"nodes": [], "edges": []}
+            }
 
-        return self._summarize_graph()
+        return {
+            "summary": self._summarize_graph(),
+            "data": self.export_graph_data(),
+            "tokens": total_tokens
+        }
+
+    def export_graph_data(self) -> Dict[str, Any]:
+        """
+        Exports the NetworkX graph to a format compatible with Vis.js
+        """
+        nodes = []
+        for node in self.graph.nodes():
+            nodes.append({"id": node, "label": node, "title": node})
+        
+        edges = []
+        for u, v, data in self.graph.edges(data=True):
+            edges.append({
+                "from": u, 
+                "to": v, 
+                "label": data.get("relationship", ""),
+                "title": data.get("context", "")
+            })
+            
+        return {"nodes": nodes, "edges": edges}
 
     def _summarize_graph(self) -> str:
         """

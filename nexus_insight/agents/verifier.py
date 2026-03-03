@@ -15,9 +15,10 @@ class ChainOfVerificationVerifier:
     def __init__(self, llm_router: LLMRouter):
         self.llm_router = llm_router
 
-    async def extract_claims(self, sources: List[RawSource]) -> List[Claim]:
+    async def extract_claims(self, sources: List[RawSource]) -> tuple[List[Claim], int]:
         """PHASE 1: Atomic Claim Extraction"""
         all_claims = []
+        total_tokens = 0
         llm = await self.llm_router.get_llm("reasoning")
         
         for source in sources:
@@ -27,6 +28,7 @@ class ChainOfVerificationVerifier:
             prompt = Prompts.CLAIM_EXTRACTION_PROMPT + f"\n\nSource Content: {source.content[:10000]}"
             try:
                 response = await llm.ainvoke(prompt)
+                total_tokens += response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
                 data = json.loads(response.content)
                 for c in data.get("claims", []):
                     all_claims.append(Claim(
@@ -39,17 +41,18 @@ class ChainOfVerificationVerifier:
             except Exception as e:
                 logger.error(f"Claim extraction failed for source {source.id}: {e}")
                 
-        return all_claims
+        return all_claims, total_tokens
 
     async def verify_claims(
         self, 
         claims: List[Claim], 
         sources: List[RawSource],
         search_func: Optional[Callable] = None
-    ) -> tuple[List[Claim], List[Contradiction]]:
+    ) -> tuple[List[Claim], List[Contradiction], int]:
         """PHASES 2, 3, & 4: Question Gen, Independent Verif, Final Decision"""
         verified_claims = []
         contradictions = []
+        total_tokens = 0
         llm_fast = await self.llm_router.get_llm("fast")
         llm_reasoning = await self.llm_router.get_llm("reasoning")
         
@@ -57,7 +60,8 @@ class ChainOfVerificationVerifier:
 
         for claim in claims:
             # Phase 2: Question Generation
-            questions = await self._generate_questions(claim, llm_fast)
+            questions, q_tokens = await self._generate_questions(claim, llm_fast)
+            total_tokens += q_tokens
             
             source = source_map.get(claim.source_id)
             if not source:
@@ -84,8 +88,9 @@ class ChainOfVerificationVerifier:
                     # If no other sources, fallback to origin (last resort, but better than nothing)
                     context = source.content
                 
-                res = await self._verify_question(q, context, llm_reasoning)
+                res, v_tokens = await self._verify_question(q, context, llm_reasoning)
                 results.append(res)
+                total_tokens += v_tokens
 
             # Phase 4: Final Decision
             is_verified, updated_confidence, contradiction = self._decide(claim, results)
@@ -97,24 +102,24 @@ class ChainOfVerificationVerifier:
             if contradiction:
                 contradictions.append(contradiction)
                 
-        return verified_claims, contradictions
+        return verified_claims, contradictions, total_tokens
 
-    async def _generate_questions(self, claim: Claim, llm) -> List[str]:
+    async def _generate_questions(self, claim: Claim, llm) -> tuple[List[str], int]:
         prompt = Prompts.VERIFICATION_QUESTION_PROMPT + f"\n\nClaim: {claim.content}"
         try:
             response = await llm.ainvoke(prompt)
             data = json.loads(response.content)
-            return data.get("questions", [])
+            return data.get("questions", []), response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
         except Exception:
-            return [f"Is the following statement true according to the source? {claim.content}"]
+            return [f"Is the following statement true according to the source? {claim.content}"], 0
 
-    async def _verify_question(self, question: str, content: str, llm) -> Dict:
+    async def _verify_question(self, question: str, content: str, llm) -> tuple[Dict, int]:
         prompt = f"<source_text>{content[:15000]}</source_text>\n<question>{question}</question>\n" + Prompts.INDEPENDENT_VERIFICATION_PROMPT
         try:
             response = await llm.ainvoke(prompt)
-            return json.loads(response.content)
+            return json.loads(response.content), response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
         except Exception:
-            return {"answer": "UNCERTAIN", "justification": "Error during verification"}
+            return {"answer": "UNCERTAIN", "justification": "Error during verification"}, 0
 
     def _decide(self, claim: Claim, results: List[Dict]) -> tuple[bool, float, Optional[Contradiction]]:
         yes_count = sum(1 for r in results if r["answer"] == "YES")

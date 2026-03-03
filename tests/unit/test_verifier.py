@@ -55,7 +55,7 @@ def other_source():
 @pytest.mark.asyncio
 async def test_extract_claims(mock_router, dummy_source):
     verifier = ChainOfVerificationVerifier(mock_router)
-    claims = await verifier.extract_claims([dummy_source])
+    claims, tokens = await verifier.extract_claims([dummy_source])
     
     assert len(claims) == 2
     assert "sky" in claims[0].content or "sky" in claims[1].content
@@ -73,7 +73,7 @@ async def test_verify_claims_cross_verification(mock_router, dummy_source, other
     )
     
     # We provide both sources. Verification should use other_source since it's not the origin.
-    verified_claims, contradictions = await verifier.verify_claims([claim_to_verify], [dummy_source, other_source])
+    verified_claims, contradictions, tokens = await verifier.verify_claims([claim_to_verify], [dummy_source, other_source])
     
     assert len(verified_claims) == 1
     assert verified_claims[0].verified is True

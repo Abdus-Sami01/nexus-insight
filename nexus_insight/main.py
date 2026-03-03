@@ -14,6 +14,8 @@ from nexus_insight.evaluation.faithfulness import FaithfulnessEvaluator
 from nexus_insight.tools.web_search import WebSearchTool
 from nexus_insight.tools.pdf_engine import PDFEngine
 from nexus_insight.tools.media_analyzer import MediaAnalyzer
+from nexus_insight.tools.arxiv_tool import ArxivTool
+from nexus_insight.tools.pubmed_tool import PubmedTool
 from nexus_insight.cognition.graph import GraphExtractor
 from nexus_insight.cognition.embeddings import LocalEmbedder
 from nexus_insight.infra.llm_router import LLMRouter
@@ -44,8 +46,10 @@ def create_app() -> FastAPI:
     web_tool = WebSearchTool()
     pdf_tool = PDFEngine(embedder)
     media_tool = MediaAnalyzer()
+    arxiv_tool = ArxivTool()
+    pubmed_tool = PubmedTool()
     
-    researcher = ResearcherAgent(web_tool, pdf_tool, media_tool)
+    researcher = ResearcherAgent(web_tool, pdf_tool, media_tool, arxiv_tool, pubmed_tool)
     verifier = ChainOfVerificationVerifier(llm_router)
     debater = MultiAgentDebater(llm_router)
     graph_extractor = GraphExtractor(llm_router)

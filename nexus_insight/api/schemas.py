@@ -4,7 +4,7 @@ from nexus_insight.cognition.state import ThoughtEntry, RawSource, Citation
 
 class ResearchRequest(BaseModel):
     query: str = Field(..., max_length=2000)
-    modalities: List[Literal["pdf", "web", "video"]] = ["web"]
+    modalities: List[Literal["pdf", "web", "video", "academic"]] = ["web"]
     pdf_urls: Optional[List[HttpUrl]] = None
     video_urls: Optional[List[HttpUrl]] = None
     stream: bool = True
@@ -20,7 +20,8 @@ class FinalReport(BaseModel):
     faithfulness_score: float
     citations: List[Citation]
     total_tokens: int
+    graph: Optional[Dict[str, Any]] = None
 
 class SSEEvent(BaseModel):
-    event: Literal["thought", "source", "progress", "result", "error", "heartbeat"]
+    event: Literal["thought", "source", "progress", "result", "error", "heartbeat", "graph"]
     data: Any

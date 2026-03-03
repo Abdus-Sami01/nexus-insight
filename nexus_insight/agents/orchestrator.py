@@ -105,6 +105,7 @@ class Orchestrator:
             "intent_classification": data["intent"],
             "query": data["sanitized_query"],
             "llm_backend_used": [response.response_metadata.get("model_name", "unknown")],
+            "total_tokens_used": response.response_metadata.get("token_usage", {}).get("total_tokens", 0),
             "thought_log": [ThoughtEntry(
                 timestamp=datetime.now(),
                 node="intake",
@@ -126,7 +127,10 @@ class Orchestrator:
         except (json.JSONDecodeError, TypeError):
             sub_queries = [state["query"]]
             
-        return {"query_refinements": sub_queries}
+        return {
+            "query_refinements": sub_queries,
+            "total_tokens_used": response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
+        }
 
     @with_circuit_breaker("explore")
     @trace_node("explore")
@@ -143,13 +147,16 @@ class Orchestrator:
     @with_circuit_breaker("analyze")
     @trace_node("analyze")
     async def node_analyze(self, state: ResearchState) -> Dict:
-        claims = await self.verifier.extract_claims(state["raw_sources"])
-        return {"extracted_claims": claims}
+        claims, tokens = await self.verifier.extract_claims(state["raw_sources"])
+        return {
+            "extracted_claims": claims,
+            "total_tokens_used": tokens
+        }
 
     @with_circuit_breaker("verify")
     @trace_node("verify")
     async def node_verify(self, state: ResearchState) -> Dict:
-        verified, contr = await self.verifier.verify_claims(
+        verified, contr, tokens = await self.verifier.verify_claims(
             state["extracted_claims"], 
             state["raw_sources"],
             search_func=self.researcher.pdf_tool.query_index
@@ -169,10 +176,15 @@ class Orchestrator:
             "verified_dossier": verified,
             "contradictions": contr,
             "confidence_score": conf_score,
-            "revision_count": state["revision_count"] + 1
+            "revision_count": state["revision_count"] + 1,
+            "total_tokens_used": tokens
         }
 
     def should_verify_continue(self, state: ResearchState) -> str:
+        # Check budget
+        if state["total_tokens_used"] >= state["token_budget"]:
+            logger.warning(f"Token budget exceeded: {state['total_tokens_used']} >= {state['token_budget']}")
+            return "stop"
         # Always stop if max revisions hit
         if state["revision_count"] >= state["max_revisions"]:
             return "stop"
@@ -208,22 +220,21 @@ class Orchestrator:
             # Fallback: just re-search the original query
             new_queries = [state["query"]]
         
-        return {"query_refinements": new_queries[:2]}
+        return {
+            "query_refinements": new_queries[:2],
+            "total_tokens_used": response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
+        }
 
     @with_circuit_breaker("build_graph")
     @trace_node("build_graph")
-    async def node_build_graph(self, state: ResearchState) -> Dict:
-        """Constructs a semantic Knowledge Graph from the extracted sources."""
-        summary = await self.graph_extractor.extract_and_build(state.get("raw_sources", []), state["query"])
+    async def node_build_graph(self, state: ResearchState) -> Dict[str, Any]:
+        """EXTRACT entities and relationships for knowledge graph"""
+        res = await self.graph_extractor.extract_and_build(state.get("raw_sources", []), state["query"])
         return {
-            "graph_summary": summary,
-            "thought_log": [ThoughtEntry(
-                timestamp=datetime.now(),
-                node="build_graph",
-                thought=f"Graph constructed. Summary length: {len(summary)} chars.",
-                tokens_used=0,
-                llm_backend="groq"
-            )]
+            "graph_summary": res["summary"],
+            "graph_data": res["data"],
+            "total_tokens_used": res.get("tokens", 0),
+            "current_node": "build_graph"
         }
 
     @with_circuit_breaker("debate")
@@ -234,14 +245,15 @@ class Orchestrator:
         unverified = [c for c in state.get("verified_dossier", []) if not c.verified]
         contradictions = state.get("contradictions", [])
         
-        log = await self.debater.resolve_conflicts(state["query"], unverified, contradictions)
+        log, tokens = await self.debater.resolve_conflicts(state["query"], unverified, contradictions)
         return {
             "debate_log": log,
+            "total_tokens_used": tokens,
             "thought_log": [ThoughtEntry(
                 timestamp=datetime.now(),
                 node="debate",
                 thought=f"Debate completed. {len(log)} turns logged.",
-                tokens_used=0,
+                tokens_used=tokens,
                 llm_backend="groq"
             )]
         }
@@ -263,13 +275,19 @@ class Orchestrator:
                 
         prompt = Prompts.SYNTHESIS_PROMPT + f"\n\nVerified Claims:\n{claims_text}\n{advanced_context}\nQuery: {state['query']}"
         response = await llm.ainvoke(prompt)
-        return {"final_report": response.content}
+        return {
+            "final_report": response.content,
+            "total_tokens_used": response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
+        }
 
     @with_circuit_breaker("evaluate")
     @trace_node("evaluate")
     async def node_evaluate(self, state: ResearchState) -> Dict:
         eval_result = await self.evaluator.evaluate(state["final_report"], state["verified_dossier"])
-        return {"faithfulness_score": eval_result["score"]}
+        return {
+            "faithfulness_score": eval_result["score"],
+            "total_tokens_used": eval_result.get("tokens", 0)
+        }
 
     def should_evaluate_continue(self, state: ResearchState) -> str:
         # If faithfulness is very low, go back to verify (re-extract or re-verify)

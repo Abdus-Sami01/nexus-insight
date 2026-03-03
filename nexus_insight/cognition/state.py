@@ -69,6 +69,7 @@ class ResearchState(TypedDict):
     
     # ADVANCED AI: GRAPHRAG & DEBATE
     graph_summary: Optional[str]               # Synthesized Knowledge Graph context
+    graph_data: Optional[Dict[str, Any]]       # Raw nodes and edges for Vis.js {"nodes": [], "edges": []}
     debate_log: Annotated[List[Dict[str, str]], operator.add] # [{"role": "proposer", "content": "..."}]
 
     # LOOP CONTROL
@@ -77,7 +78,7 @@ class ResearchState(TypedDict):
     query_refinements: Annotated[List[str], operator.add]
     
     # RESOURCE TRACKING
-    total_tokens_used: int
+    total_tokens_used: Annotated[int, operator.add]
     token_budget: int                  # Soft limit for loop control
     budget_exceeded: bool
     
