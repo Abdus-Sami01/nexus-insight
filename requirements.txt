@@ -59,7 +59,3 @@ pytest-asyncio==0.24.0
 pytest-mock==3.14.0
 respx==0.21.1                  # Mock httpx
 networkx==3.2.1
-
-# Testing
-pytest==8.1.1
-pytest-asyncio==0.23.6
