@@ -75,13 +75,17 @@ Rules:
 
 Write the full markdown report directly (no JSON needed for this step)."""
 
-    FAITHFULNESS_PROMPT = """You are a faithfulness evaluator. Check if the given sentence is supported by the verified claims. Respond ONLY with valid JSON.
-
+    FAITHFULNESS_PROMPT = """You are a faithfulness evaluator. Check if the given sentences are supported by the verified claims. Respond ONLY with valid JSON.
+    
 Required JSON format exactly:
-{"verdict": "supported", "reason": "<one sentence>"}
+{"verdicts": [
+  {"sentence": "<original sentence>", "verdict": "supported", "reason": "<one sentence>"},
+  ...
+]}
 
 Rules:
 - verdict: must be exactly "supported", "unsupported", or "contradicted"
 - Base your judgment only on the verified_claims provided.
+- Provide a verdict for EVERY sentence in the input list.
 
 Respond with ONLY the JSON object."""

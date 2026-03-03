@@ -1,7 +1,7 @@
 import logging
 import json
-from typing import List, Dict, Any, Optional
-from nexus_insight.cognition.state import Claim, RawSource, Contradiction, ContradictionSeverity
+from typing import List, Dict, Any, Optional, Callable
+from nexus_insight.cognition.state import Claim, RawSource, Contradiction, ContradictionSeverity, SourceType
 from nexus_insight.cognition.prompts import Prompts
 from nexus_insight.infra.llm_router import LLMRouter
 
@@ -41,7 +41,12 @@ class ChainOfVerificationVerifier:
                 
         return all_claims
 
-    async def verify_claims(self, claims: List[Claim], sources: List[RawSource]) -> tuple[List[Claim], List[Contradiction]]:
+    async def verify_claims(
+        self, 
+        claims: List[Claim], 
+        sources: List[RawSource],
+        search_func: Optional[Callable] = None
+    ) -> tuple[List[Claim], List[Contradiction]]:
         """PHASES 2, 3, & 4: Question Gen, Independent Verif, Final Decision"""
         verified_claims = []
         contradictions = []
@@ -58,10 +63,28 @@ class ChainOfVerificationVerifier:
             if not source:
                 continue
 
+            # PHASE 3: Independent Verification (Anti-anchoring)
+            # Logic: Check claim against ALL sources EXCEPT the origin source.
+            other_sources = [s for s in sources if s.id != claim.source_id]
+            
             results = []
             for q in questions:
-                # Phase 3: Independent Verification (Anti-anchoring)
-                res = await self._verify_question(q, source.content, llm_reasoning)
+                # Find the best context from other sources
+                context = ""
+                for osource in other_sources:
+                    if osource.source_type == SourceType.PDF and search_func:
+                        # Use deep search for PDFs
+                        chunks = search_func(osource.id, q)
+                        context += "\n".join(chunks)
+                    else:
+                        # Use stored snippet for web/other
+                        context += osource.content or ""
+                
+                if not context:
+                    # If no other sources, fallback to origin (last resort, but better than nothing)
+                    context = source.content
+                
+                res = await self._verify_question(q, context, llm_reasoning)
                 results.append(res)
 
             # Phase 4: Final Decision

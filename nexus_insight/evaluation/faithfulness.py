@@ -32,25 +32,32 @@ class FaithfulnessEvaluator:
         unsupported = []
         contradicted = []
 
-        for sentence in sentences:
-            if len(sentence.split()) < 5: continue # Skip short sentences
-            
-            prompt = f"<verified_claims>\n{claims_text}\n</verified_claims>\n<sentence>{sentence}</sentence>\n" + Prompts.FAITHFULNESS_PROMPT
+        batch_size = 5
+        for i in range(0, len(sentences), batch_size):
+            batch = [s for s in sentences[i:i + batch_size] if len(s.split()) >= 5]
+            if not batch: continue
+
+            sentences_input = "\n".join([f"- {s}" for s in batch])
+            prompt = f"<verified_claims>\n{claims_text}\n</verified_claims>\n<sentences>\n{sentences_input}\n</sentences>\n" + Prompts.FAITHFULNESS_PROMPT
             
             try:
                 response = await llm_reasoning.ainvoke(prompt)
                 data = json.loads(response.content)
-                verdict = data.get("verdict", "unsupported")
+                verdicts = data.get("verdicts", [])
                 
-                if verdict == "supported":
-                    supported_count += 1
-                elif verdict == "contradicted":
-                    contradicted.append(sentence)
-                else:
-                    unsupported.append(sentence)
+                for item in verdicts:
+                    sentence = item.get("sentence")
+                    verdict = item.get("verdict", "unsupported")
+                    
+                    if verdict == "supported":
+                        supported_count += 1
+                    elif verdict == "contradicted":
+                        contradicted.append(sentence)
+                    else:
+                        unsupported.append(sentence)
             except Exception as e:
-                logger.error(f"Faithfulness check failed for sentence: {sentence}. Error: {e}")
-                unsupported.append(sentence)
+                logger.error(f"Faithfulness batch check failed. Error: {e}")
+                unsupported.extend(batch)
 
         total = len(sentences) or 1
         score = supported_count / total

@@ -50,15 +50,37 @@ class LLMRouter:
         elif mode == "ollama":
             return await self._get_ollama_llm(task_type)
         
-        # Auto mode: try Groq first
-        if await self._check_groq_available():
+        # Auto mode: Return a resilient wrapper
+        return ResilientLLMWrapper(self, task_type)
+
+class ResilientLLMWrapper:
+    """
+    Wraps LangChain models to handle mid-stream backends switching.
+    """
+    def __init__(self, router: 'LLMRouter', task_type: str):
+        self.router = router
+        self.task_type = task_type
+        self.active_backend = "groq"
+
+    async def ainvoke(self, input: Any, **kwargs) -> Any:
+        if self.active_backend == "groq":
             try:
-                # Return a wrapper that handles rate limits by falling back
-                return self._get_groq_llm(task_type)
+                llm = self.router._get_groq_llm(self.task_type)
+                return await llm.ainvoke(input, **kwargs)
+            except (RateLimitError, APIStatusError) as e:
+                logger.warning(f"Groq {self.active_backend} failed with {type(e).__name__}. Falling back to Ollama.")
+                self.active_backend = "ollama"
             except Exception as e:
-                logger.warning(f"Groq failed during init: {e}. Falling back to Ollama.")
-        
-        return await self._get_ollama_llm(task_type)
+                logger.error(f"Groq unexpected error: {e}. Falling back to Ollama.")
+                self.active_backend = "ollama"
+
+        # Ollama Fallback
+        llm = await self.router._get_ollama_llm(self.task_type)
+        return await llm.ainvoke(input, **kwargs)
+
+    def __getattr__(self, name):
+        # Fallback for other methods if needed, though ainvoke is primary for orchestration
+        return getattr(self.router._get_groq_llm(self.task_type), name)
 
     def _get_groq_llm(self, task_type: str) -> BaseChatModel:
         model_name = self.TASK_MODEL_MAP[task_type]["groq"]

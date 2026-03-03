@@ -13,6 +13,8 @@ from nexus_insight.agents.verifier import ChainOfVerificationVerifier
 from nexus_insight.agents.debater import MultiAgentDebater
 from nexus_insight.cognition.graph import GraphExtractor
 from nexus_insight.evaluation.faithfulness import FaithfulnessEvaluator
+from nexus_insight.infra.privacy import PrivacyService
+from nexus_insight.infra.resilience import with_circuit_breaker
 from nexus_insight.config import settings
 
 logger = logging.getLogger(__name__)
@@ -33,6 +35,7 @@ class Orchestrator:
         self.debater = debater
         self.graph_extractor = graph_extractor
         self.evaluator = evaluator
+        self.privacy_service = PrivacyService()
         self.graph = self._build_graph()
 
     def _build_graph(self):
@@ -83,10 +86,14 @@ class Orchestrator:
 
         return workflow.compile()
 
+    @with_circuit_breaker("intake")
     @trace_node("intake")
     async def node_intake(self, state: ResearchState) -> Dict:
+        # Redact PII from user query
+        redacted_query = self.privacy_service.redact(state['query'])
+        
         llm = await self.llm_router.get_llm("fast")
-        prompt = Prompts.INTAKE_PROMPT + f"\n\nUser Query: {state['query']}"
+        prompt = Prompts.INTAKE_PROMPT + f"\n\nUser Query: {redacted_query}"
         response = await llm.ainvoke(prompt)
         try:
             data = json.loads(response.content)
@@ -107,6 +114,7 @@ class Orchestrator:
             )]
         }
 
+    @with_circuit_breaker("plan")
     @trace_node("plan")
     async def node_plan(self, state: ResearchState) -> Dict:
         llm = await self.llm_router.get_llm("fast")
@@ -120,6 +128,7 @@ class Orchestrator:
             
         return {"query_refinements": sub_queries}
 
+    @with_circuit_breaker("explore")
     @trace_node("explore")
     async def node_explore(self, state: ResearchState) -> Dict:
         modalities = state.get("structured_output", {}).get("modalities", ["web"])
@@ -131,14 +140,20 @@ class Orchestrator:
         )
         return {"raw_sources": sources}
 
+    @with_circuit_breaker("analyze")
     @trace_node("analyze")
     async def node_analyze(self, state: ResearchState) -> Dict:
         claims = await self.verifier.extract_claims(state["raw_sources"])
         return {"extracted_claims": claims}
 
+    @with_circuit_breaker("verify")
     @trace_node("verify")
     async def node_verify(self, state: ResearchState) -> Dict:
-        verified, contr = await self.verifier.verify_claims(state["extracted_claims"], state["raw_sources"])
+        verified, contr = await self.verifier.verify_claims(
+            state["extracted_claims"], 
+            state["raw_sources"],
+            search_func=self.researcher.pdf_tool.query_index
+        )
         
         # Calculate confidence
         verified_count = sum(1 for c in verified if c.verified)
@@ -169,6 +184,7 @@ class Orchestrator:
             return "continue"
         return "stop"
 
+    @with_circuit_breaker("refine")
     @trace_node("refine")
     async def node_refine(self, state: ResearchState) -> Dict:
         """Generate targeted follow-up queries based on what's missing."""
@@ -194,6 +210,7 @@ class Orchestrator:
         
         return {"query_refinements": new_queries[:2]}
 
+    @with_circuit_breaker("build_graph")
     @trace_node("build_graph")
     async def node_build_graph(self, state: ResearchState) -> Dict:
         """Constructs a semantic Knowledge Graph from the extracted sources."""
@@ -209,6 +226,7 @@ class Orchestrator:
             )]
         }
 
+    @with_circuit_breaker("debate")
     @trace_node("debate")
     async def node_debate(self, state: ResearchState) -> Dict:
         """Runs the adversarial Proposer/Skeptic debate over contradictions and unverified claims."""
@@ -228,6 +246,7 @@ class Orchestrator:
             )]
         }
 
+    @with_circuit_breaker("synthesize")
     @trace_node("synthesize")
     async def node_synthesize(self, state: ResearchState) -> Dict:
         llm = await self.llm_router.get_llm("reasoning")
@@ -246,6 +265,7 @@ class Orchestrator:
         response = await llm.ainvoke(prompt)
         return {"final_report": response.content}
 
+    @with_circuit_breaker("evaluate")
     @trace_node("evaluate")
     async def node_evaluate(self, state: ResearchState) -> Dict:
         eval_result = await self.evaluator.evaluate(state["final_report"], state["verified_dossier"])
@@ -258,6 +278,7 @@ class Orchestrator:
             return "continue"
         return "stop"
 
+    @with_circuit_breaker("finalize")
     @trace_node("finalize")
     async def node_finalize(self, state: ResearchState) -> Dict:
         # Format citations
