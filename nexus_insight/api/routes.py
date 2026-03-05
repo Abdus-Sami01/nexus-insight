@@ -26,18 +26,40 @@ def set_orchestrator(orch: Orchestrator):
     _orchestrator = orch
 
 @router.post("/research")
+@router.get("/research")
 async def start_research(
-    request: ResearchRequest,
-    background_tasks: BackgroundTasks,
+    request: Optional[ResearchRequest] = None,
+    query: Optional[str] = None,
+    modalities: Optional[str] = None,
+    stream: bool = False,
+    background_tasks: BackgroundTasks = None,
     api_key: str = Depends(validate_api_key)
 ):
     if not _orchestrator:
         raise HTTPException(status_code=503, detail="Orchestrator not initialized")
 
+    # Handle both POST (request body) and GET (query params)
+    if request:
+        q = request.query
+        mods = request.modalities
+        is_stream = request.stream
+        conf_thresh = request.confidence_threshold
+    else:
+        if not query:
+            raise HTTPException(status_code=400, detail="Query is required")
+        q = query
+        import json
+        try:
+            mods = json.loads(modalities) if modalities else ["web"]
+        except:
+            mods = ["web"]
+        is_stream = stream
+        conf_thresh = 0.6  # default for GET
+
     session_id = str(uuid.uuid4())
     
     initial_state: ResearchState = {
-        "query": request.query,
+        "query": q,
         "session_id": session_id,
         "intent_classification": "factual",
         "raw_sources": [],
@@ -46,13 +68,13 @@ async def start_research(
         "contradictions": [],
         "verified_dossier": [],
         "revision_count": 0,
-        "max_revisions": 5,
+        "max_revisions": 2, # Reduced from 5 for faster response
         "query_refinements": [],
         "total_tokens_used": 0,
         "token_budget": 200000,
         "budget_exceeded": False,
         "confidence_score": 0.0,
-        "confidence_threshold": request.confidence_threshold,
+        "confidence_threshold": conf_thresh,
         "faithfulness_score": 1.0,
         "llm_backend_used": [],
         "graph_data": {"nodes": [], "edges": []},
@@ -63,17 +85,16 @@ async def start_research(
         "final_report": None,
         "citations": [],
         "structured_output": {
-            "modalities": request.modalities,
-            "pdf_urls": [str(u) for u in request.pdf_urls] if request.pdf_urls else [],
-            "video_urls": [str(u) for u in request.video_urls] if request.video_urls else []
+            "modalities": mods,
+            "pdf_urls": [],
+            "video_urls": []
         }
     }
 
-    if request.stream:
+    if is_stream:
         return EventSourceResponse(sse_generator(_run_research_stream(initial_state)))
     else:
-        # Non-streaming implementation would await full execution
-        result = await _orchestrator.graph.ainvoke(initial_state)
+        result = await _orchestrator.graph.ainvoke(initial_state, config={"recursion_limit": 100})
         _memory_manager.save_session(result)
         return result
 
@@ -84,7 +105,7 @@ async def _run_research_stream(state: ResearchState):
     """
     full_state = state.copy()
     try:
-        async for output in _orchestrator.graph.astream(state, stream_mode="updates"):
+        async for output in _orchestrator.graph.astream(state, stream_mode="updates", config={"recursion_limit": 100}):
             # Accumulate updates into full_state
             for node_name, node_data in output.items():
                 for key, value in node_data.items():

@@ -20,7 +20,7 @@ class WebSearchTool:
     def __init__(self):
         pass  # No shared session — each search creates its own
 
-    @exponential_backoff(max_retries=3, base_delay=settings.DDG_RATE_LIMIT_DELAY)
+    @exponential_backoff(max_retries=2, base_delay=settings.DDG_RATE_LIMIT_DELAY * 2)
     async def search(self, query: str, max_results: int = 7) -> List[RawSource]:
         results = []
         try:
@@ -35,11 +35,15 @@ class WebSearchTool:
                     "snippet": res["body"]
                 })
         except Exception as e:
-            logger.warning(f"DuckDuckGo search failed: {e}. Trying SearXNG...")
+            logger.warning(f"DuckDuckGo search failed for '{query}': {e}. Trying SearXNG...")
             results = await self._searxng_fallback(query, max_results)
 
+        if not results:
+             logger.warning(f"No results found for query: {query}")
+             return []
+
         if len(results) < 3:
-            logger.info("Few results from DDG. Supplementing with SearXNG...")
+            logger.info(f"Few results ({len(results)}) for '{query}'. Supplementing with SearXNG...")
             searx_results = await self._searxng_fallback(query, max_results)
             # Deduplicate by URL
             seen_urls = {res["url"] for res in results}
@@ -57,7 +61,7 @@ class WebSearchTool:
         try:
             async with httpx.AsyncClient() as client:
                 params = {"q": query, "format": "json", "language": "en"}
-                response = await client.get(f"{settings.SEARXNG_URL}/search", params=params, timeout=5.0)
+                response = await client.get(f"{settings.SEARXNG_URL}/search", params=params, timeout=2.0)
                 if response.status_code == 200:
                     data = response.json()
                     return [{"url": r["url"], "title": r["title"], "snippet": r.get("content", "")} 

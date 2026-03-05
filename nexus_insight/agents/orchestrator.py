@@ -129,7 +129,14 @@ class Orchestrator:
             
         return {
             "query_refinements": sub_queries,
-            "total_tokens_used": response.response_metadata.get("token_usage", {}).get("total_tokens", 0)
+            "total_tokens_used": response.response_metadata.get("token_usage", {}).get("total_tokens", 0),
+            "thought_log": [ThoughtEntry(
+                timestamp=datetime.now(),
+                node="plan",
+                thought=f"Generated {len(sub_queries)} targeted research sub-queries.",
+                tokens_used=response.response_metadata.get("token_usage", {}).get("total_tokens", 0),
+                llm_backend="groq"
+            )]
         }
 
     @with_circuit_breaker("explore")
@@ -142,7 +149,16 @@ class Orchestrator:
             pdf_urls=state.get("structured_output", {}).get("pdf_urls"),
             video_urls=state.get("structured_output", {}).get("video_urls")
         )
-        return {"raw_sources": sources}
+        return {
+            "raw_sources": sources,
+            "thought_log": [ThoughtEntry(
+                timestamp=datetime.now(),
+                node="explore",
+                thought=f"Gathered {len(sources)} unique sources from {', '.join(modalities)}.",
+                tokens_used=0,
+                llm_backend="system"
+            )]
+        }
 
     @with_circuit_breaker("analyze")
     @trace_node("analyze")

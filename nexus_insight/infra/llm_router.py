@@ -53,35 +53,6 @@ class LLMRouter:
         # Auto mode: Return a resilient wrapper
         return ResilientLLMWrapper(self, task_type)
 
-class ResilientLLMWrapper:
-    """
-    Wraps LangChain models to handle mid-stream backends switching.
-    """
-    def __init__(self, router: 'LLMRouter', task_type: str):
-        self.router = router
-        self.task_type = task_type
-        self.active_backend = "groq"
-
-    async def ainvoke(self, input: Any, **kwargs) -> Any:
-        if self.active_backend == "groq":
-            try:
-                llm = self.router._get_groq_llm(self.task_type)
-                return await llm.ainvoke(input, **kwargs)
-            except (RateLimitError, APIStatusError) as e:
-                logger.warning(f"Groq {self.active_backend} failed with {type(e).__name__}. Falling back to Ollama.")
-                self.active_backend = "ollama"
-            except Exception as e:
-                logger.error(f"Groq unexpected error: {e}. Falling back to Ollama.")
-                self.active_backend = "ollama"
-
-        # Ollama Fallback
-        llm = await self.router._get_ollama_llm(self.task_type)
-        return await llm.ainvoke(input, **kwargs)
-
-    def __getattr__(self, name):
-        # Fallback for other methods if needed, though ainvoke is primary for orchestration
-        return getattr(self.router._get_groq_llm(self.task_type), name)
-
     def _get_groq_llm(self, task_type: str) -> BaseChatModel:
         model_name = self.TASK_MODEL_MAP[task_type]["groq"]
         return ChatGroq(
@@ -112,9 +83,6 @@ class ResilientLLMWrapper:
             return self._groq_available_cached
 
         try:
-            # We don't want to actually send a request, but ChatGroq doesn't have a cheap 'ping'
-            # However, we can just check if the key exists for now, or do a tiny request if needed.
-            # For brevity and safety, we check if key is present and not dummy.
             self._groq_available_cached = len(settings.GROQ_API_KEY) > 10
         except Exception:
             self._groq_available_cached = False
@@ -139,3 +107,31 @@ class ResilientLLMWrapper:
             "ollama": {"available": await self._check_ollama_available()},
             "active_mode": settings.LLM_MODE
         }
+
+class ResilientLLMWrapper:
+    """
+    Wraps LangChain models to handle mid-stream backends switching.
+    """
+    def __init__(self, router: 'LLMRouter', task_type: str):
+        self.router = router
+        self.task_type = task_type
+        self.active_backend = "groq"
+
+    async def ainvoke(self, input: Any, **kwargs) -> Any:
+        if self.active_backend == "groq":
+            try:
+                llm = self.router._get_groq_llm(self.task_type)
+                return await llm.ainvoke(input, **kwargs)
+            except (RateLimitError, APIStatusError) as e:
+                logger.warning(f"Groq {self.active_backend} failed with {type(e).__name__}. Falling back to Ollama.")
+                self.active_backend = "ollama"
+            except Exception as e:
+                logger.error(f"Groq unexpected error: {e}. Falling back to Ollama.")
+                self.active_backend = "ollama"
+
+        # Ollama Fallback
+        llm = await self.router._get_ollama_llm(self.task_type)
+        return await llm.ainvoke(input, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self.router._get_groq_llm(self.task_type), name)
